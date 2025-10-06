@@ -11,6 +11,7 @@ from app.calculator_config import CalculatorConfig
 from app.exceptions import OperationError, ValidationError
 from app.history import LoggingObserver, AutoSaveObserver
 from app.operations import OperationFactory
+from unittest.mock import MagicMock
 
 # Fixture to initialize Calculator with a temporary directory for file paths
 @pytest.fixture
@@ -178,3 +179,47 @@ def test_calculator_repl_help(mock_print, mock_input):
 def test_calculator_repl_addition(mock_print, mock_input):
     calculator_repl()
     mock_print.assert_any_call("\nResult: 5")
+
+# --- 1. Test logging setup failure ---
+def test_setup_logging_failure(tmp_path):
+    config = CalculatorConfig(base_dir=tmp_path)
+    calc = Calculator(config=config)
+    with patch("app.calculator.os.makedirs", side_effect=PermissionError("no access")):
+        with pytest.raises(PermissionError):
+            calc._setup_logging()
+
+# --- 2. Test setup_directories failure ---
+def test_setup_directories_failure(tmp_path):
+    config = CalculatorConfig(base_dir=tmp_path)
+    calc = Calculator(config=config)
+    with patch("app.calculator.Path.mkdir", side_effect=PermissionError("no permission")):
+        with pytest.raises(PermissionError):
+            calc._setup_directories()
+
+# --- 3. Test perform_operation generic Exception ---
+def test_perform_operation_generic_exception(calculator):
+    calc = calculator
+    mock_operation = MagicMock()
+    mock_operation.execute.side_effect = RuntimeError("boom")
+    calc.set_operation(mock_operation)
+    with pytest.raises(OperationError, match="Operation failed"):
+        calc.perform_operation(2, 3)
+
+# --- 4. Test save_history failure ---
+def test_save_history_failure(calculator):
+    with patch("app.calculator.pd.DataFrame.to_csv", side_effect=Exception("save fail")):
+        with pytest.raises(OperationError, match="Failed to save history"):
+            calculator.save_history()
+
+# --- 5. Test load_history failure ---
+def test_load_history_failure(calculator):
+    with patch("app.calculator.Path.exists", return_value=True), \
+         patch("app.calculator.pd.read_csv", side_effect=Exception("bad read")):
+        with pytest.raises(OperationError, match="Failed to load history"):
+            calculator.load_history()
+
+# --- 6. Test undo/redo return False ---
+def test_undo_redo_false(calculator):
+    calc = calculator
+    assert calc.undo() is False
+    assert calc.redo() is False
