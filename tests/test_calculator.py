@@ -223,3 +223,49 @@ def test_undo_redo_false(calculator):
     calc = calculator
     assert calc.undo() is False
     assert calc.redo() is False
+
+# --- 9. Test REPL: 'clear', 'history', 'undo', 'redo' ---
+@patch('builtins.input', side_effect=['clear', 'history', 'undo', 'redo', 'exit'])
+@patch('builtins.print')
+def test_calculator_repl_history_clear_undo_redo(mock_print, mock_input):
+    with patch('app.calculator.Calculator.save_history'):
+        calculator_repl()
+        mock_print.assert_any_call("History cleared")
+        mock_print.assert_any_call("No calculations in history")
+        mock_print.assert_any_call("Nothing to undo")
+        mock_print.assert_any_call("Nothing to redo")
+        mock_print.assert_any_call("Goodbye!")
+
+# --- 10. Test REPL: 'save' and 'load' commands ---
+@patch('builtins.input', side_effect=['save', 'load', 'exit'])
+@patch('builtins.print')
+def test_calculator_repl_save_load(mock_print, mock_input):
+    with patch('app.calculator.Calculator.save_history') as mock_save, \
+         patch('app.calculator.Calculator.load_history') as mock_load:
+        calculator_repl()
+        mock_save.assert_called()
+        mock_load.assert_called()
+        mock_print.assert_any_call("History loaded successfully")
+        mock_print.assert_any_call("Goodbye!")
+
+# --- 11. Test REPL: operation canceled ---
+@patch('builtins.input', side_effect=['add', 'cancel', 'exit'])
+@patch('builtins.print')
+def test_calculator_repl_cancel_operation(mock_print, mock_input):
+    calculator_repl()
+    mock_print.assert_any_call("Operation cancelled")
+
+# --- 12. Test REPL: unknown command ---
+@patch('builtins.input', side_effect=['nonsense', 'exit'])
+@patch('builtins.print')
+def test_calculator_repl_unknown_command(mock_print, mock_input):
+    calculator_repl()
+    mock_print.assert_any_call("Unknown command: 'nonsense'. Type 'help' for available commands.")
+
+# --- 13. Test REPL: top-level fatal error handling ---
+@patch('builtins.print')
+@patch('app.calculator.Calculator.__init__', side_effect=Exception("mocked failure"))
+def test_calculator_repl_fatal_error(mock_init, mock_print):
+    with pytest.raises(Exception):
+        calculator_repl()
+    mock_print.assert_any_call("Fatal error: mocked failure")
